@@ -99,21 +99,26 @@ function createChorusExplosion(x, y, count = 8) {
   }
 }
 
-function drawModernText(text, screen, effect, elapsed, timeSinceStart) {
+function drawTypingText(text, screen, effect, elapsed, timeSinceStart, nextLyricTime) {
+  // Hitung berapa huruf yang harus muncul
+  const availableTime = nextLyricTime * 0.75; // 75% waktu untuk typing
+  const charsPerSecond = text.length / availableTime;
+  const charsToShow = Math.min(text.length, Math.floor(timeSinceStart * charsPerSecond));
+  
+  // Text yang akan ditampilkan (substring)
+  const displayText = text.substring(0, charsToShow);
+  
   try {
-    // Chorus menggunakan font yang lebih besar!
+    // Chorus menggunakan font yang lebih besar
     const font = (effect === 'chorus' || effect === 'chorusQuestion') ? 'Big' : 'Standard';
     
-    const art = figlet.textSync(text, { 
+    const art = figlet.textSync(displayText || " ", { 
       font: font,
       horizontalLayout: 'fitted'
     });
     
     const lines = art.split('\n').filter(line => line.trim());
     const startY = Math.floor((HEIGHT - lines.length) / 2);
-    
-    // Smooth fade in animation
-    const fadeProgress = Math.min(1, timeSinceStart * 1.2);
     
     lines.forEach((line, i) => {
       const y = startY + i;
@@ -130,7 +135,6 @@ function drawModernText(text, screen, effect, elapsed, timeSinceStart) {
         
         switch(effect) {
           case 'chorus':
-            // Rainbow pulse untuk chorus!
             const chorusPulse = Math.sin(elapsed * 4 + j * 0.15 + i * 0.3) * 0.5 + 0.5;
             const colorPhase = Math.floor((elapsed * 2 + j * 0.1) % 4);
             
@@ -144,14 +148,12 @@ function drawModernText(text, screen, effect, elapsed, timeSinceStart) {
               coloredChar = chalk.cyan(char);
             }
             
-            // Heavy particles untuk chorus
-            if (Math.random() < 0.015) {
+            if (Math.random() < 0.012) {
               createChorusExplosion(x, y, 6);
             }
             break;
             
           case 'chorusQuestion':
-            // Efek berkedip untuk question
             const questionPulse = Math.sin(elapsed * 5) * 0.5 + 0.5;
             
             if (questionPulse > 0.8) {
@@ -164,21 +166,13 @@ function drawModernText(text, screen, effect, elapsed, timeSinceStart) {
               coloredChar = chalk.cyan(char);
             }
             
-            if (Math.random() < 0.01) {
+            if (Math.random() < 0.008) {
               createChorusExplosion(x, y, 4);
             }
             break;
           
           case 'fadeIn':
-            if (fadeProgress > 0.8) {
-              coloredChar = chalk.whiteBright(char);
-            } else if (fadeProgress > 0.5) {
-              coloredChar = chalk.white(char);
-            } else if (fadeProgress > 0.3) {
-              coloredChar = chalk.cyan(char);
-            } else {
-              coloredChar = chalk.blue(char);
-            }
+            coloredChar = chalk.whiteBright(char);
             break;
             
           case 'glow':
@@ -191,20 +185,8 @@ function drawModernText(text, screen, effect, elapsed, timeSinceStart) {
               coloredChar = chalk.blueBright(char);
             }
             
-            // Occasional sparks
-            if (Math.random() < 0.005 && glow > 0.8) {
+            if (Math.random() < 0.004 && glow > 0.8) {
               createSparks(x, y, 2);
-            }
-            break;
-            
-          case 'pulse':
-            const pulse = Math.sin(elapsed * 3) * 0.5 + 0.5;
-            if (pulse > 0.7) {
-              coloredChar = chalk.magentaBright(char);
-            } else if (pulse > 0.4) {
-              coloredChar = chalk.magenta(char);
-            } else {
-              coloredChar = chalk.cyan(char);
             }
             break;
             
@@ -215,20 +197,50 @@ function drawModernText(text, screen, effect, elapsed, timeSinceStart) {
         screen[y][x] = coloredChar;
       }
     });
+    
+    // Cursor berkedip di akhir text
+    if (charsToShow < text.length && Math.floor(elapsed * 6) % 2 === 0) {
+      // Tambahkan cursor di ujung
+      const cursorArt = figlet.textSync(displayText + "█", { 
+        font: font,
+        horizontalLayout: 'fitted'
+      });
+      const cursorLines = cursorArt.split('\n').filter(line => line.trim());
+      
+      cursorLines.forEach((line, i) => {
+        const y = startY + i;
+        if (y < 0 || y >= HEIGHT) return;
+        const startX = Math.floor((WIDTH - line.length) / 2);
+        
+        // Hanya render karakter cursor (di akhir)
+        const cursorX = startX + line.length - 1;
+        if (cursorX >= 0 && cursorX < WIDTH && line[line.length - 1] !== ' ') {
+          screen[y][cursorX] = chalk.whiteBright("█");
+        }
+      });
+    }
+    
   } catch (e) {
-    // Fallback
+    // Fallback jika figlet error
     const y = Math.floor(HEIGHT / 2);
-    const startX = Math.floor((WIDTH - text.length) / 2);
-    for (let i = 0; i < text.length; i++) {
+    const startX = Math.floor((WIDTH - displayText.length) / 2);
+    for (let i = 0; i < displayText.length; i++) {
       if (startX + i >= 0 && startX + i < WIDTH) {
-        screen[y][startX + i] = chalk.whiteBright(text[i]);
+        screen[y][startX + i] = chalk.whiteBright(displayText[i]);
+      }
+    }
+    
+    // Cursor
+    if (charsToShow < text.length && Math.floor(elapsed * 6) % 2 === 0) {
+      const cursorX = startX + displayText.length;
+      if (cursorX < WIDTH) {
+        screen[y][cursorX] = chalk.whiteBright("█");
       }
     }
   }
 }
 
 function drawMinimalBackground(screen, elapsed) {
-  // Subtle flowing lines
   const wave1Y = Math.floor(HEIGHT * 0.2 + Math.sin(elapsed * 0.5) * 3);
   const wave2Y = Math.floor(HEIGHT * 0.8 + Math.cos(elapsed * 0.7) * 3);
   
@@ -248,7 +260,6 @@ function drawMinimalBackground(screen, elapsed) {
     }
   }
   
-  // Ambient dots - lebih banyak saat chorus
   const dotCount = 15;
   for (let i = 0; i < dotCount; i++) {
     const x = Math.floor((Math.sin(elapsed * 0.3 + i) * 0.5 + 0.5) * WIDTH);
@@ -263,7 +274,6 @@ function drawMinimalBackground(screen, elapsed) {
 }
 
 function drawCleanBorder(screen, elapsed) {
-  // Top & bottom minimalist border
   for (let x = 0; x < WIDTH; x++) {
     const pulse = Math.sin(elapsed * 2 + x * 0.05) * 0.5 + 0.5;
     const char = "─";
@@ -280,7 +290,6 @@ function drawCleanBorder(screen, elapsed) {
     }
   }
   
-  // Corner accents
   screen[0][0] = chalk.cyanBright("╭");
   screen[0][WIDTH-1] = chalk.cyanBright("╮");
   screen[HEIGHT-1][0] = chalk.cyanBright("╰");
@@ -306,7 +315,6 @@ function drawProgressBar(screen, elapsed, totalTime) {
     }
   }
   
-  // Time indicator
   const timeText = `${Math.floor(elapsed)}s`;
   const timeX = barX + barWidth + 2;
   for (let i = 0; i < timeText.length; i++) {
@@ -326,10 +334,8 @@ function main() {
     const elapsed = (Date.now() - start) / 1000;
     const screen = Array.from({ length: HEIGHT }, () => Array(WIDTH).fill(" "));
 
-    // Clean background
     drawMinimalBackground(screen, elapsed);
 
-    // Particles
     particles = particles.filter(p => {
       if (p.update()) {
         const x = Math.floor(p.x);
@@ -344,7 +350,6 @@ function main() {
       return false;
     });
 
-    // Lyrics system
     if (lyricIndex < lyrics.length && elapsed >= lyrics[lyricIndex].time) {
       lyricStartTime = elapsed;
       lyricIndex++;
@@ -353,13 +358,17 @@ function main() {
     const currentLyric = lyrics[lyricIndex - 1];
     if (currentLyric) {
       const timeSinceStart = elapsed - lyricStartTime;
-      drawModernText(currentLyric.text, screen, currentLyric.effect, elapsed, timeSinceStart);
+      
+      let nextLyricTime = 3;
+      if (lyricIndex < lyrics.length) {
+        nextLyricTime = lyrics[lyricIndex].time - currentLyric.time;
+      }
+      
+      drawTypingText(currentLyric.text, screen, currentLyric.effect, elapsed, timeSinceStart, nextLyricTime);
     }
 
-    // Clean border
     drawCleanBorder(screen, elapsed);
     
-    // Progress bar
     const totalTime = lyrics.length > 0 ? lyrics[lyrics.length - 1].time + 5 : 30;
     drawProgressBar(screen, elapsed, totalTime);
 
